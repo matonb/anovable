@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "anovable"
+name = "matonb-anovable"
 dynamic = ["version"]
 description = "Python library for controlling Anova Precision Cookers via Bluetooth LE"
 readme = "README.md"
@@ -101,7 +101,7 @@ branch = "main"
 changelog_file = "CHANGELOG.md"
 dist_path = "dist/"
 remove_dist = false
-upload_to_pypi = false
+upload_to_pypi = true
 upload_to_release = true
 build_command = "python -m build"
 
