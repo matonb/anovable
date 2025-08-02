@@ -15,7 +15,7 @@ from .exceptions import AnovaError
 app = typer.Typer(
     name="anova-cli",
     help="Control Anova Precision Cooker via Bluetooth LE",
-    add_completion=False,
+    add_completion=True,
 )
 
 
