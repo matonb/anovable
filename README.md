@@ -49,6 +49,12 @@ async def main():
         # Start cooking
         await anova.start_cooking()
 
+        # Set timer (auto-starts by default)
+        await anova.set_timer(120)  # 120 minutes, auto-starts
+
+        # Or set timer without auto-starting
+        await anova.set_timer(120, auto_start=False)
+
     await anova.disconnect()
 
 asyncio.run(main())
@@ -60,8 +66,10 @@ The CLI automatically uses your MAC address from `anovable.yaml`:
 
 ### Status Commands
 ```bash
-# Get device status
+# Get comprehensive device status
 anova-cli status
+# or
+anova-cli state
 
 # Get current temperature
 anova-cli temp
@@ -84,26 +92,40 @@ anova-cli start
 # Stop cooking
 anova-cli stop
 
-# Set target temperature (Celsius)
-anova-cli set-temp --value 60.0
+# Set target temperature (Celsius) - uses positional argument
+anova-cli set-temp 60.0
 
-# Set timer (minutes)
-anova-cli set-timer --value 120
+# Set timer (minutes) - automatically starts timer by default
+anova-cli set-timer 120
+
+# Set timer without auto-starting
+anova-cli set-timer 120 --no-auto-start
+
+# Manual timer control
+anova-cli start-timer
+anova-cli stop-timer
 ```
 
 ### Options
 ```bash
-# Override MAC address
+# Override MAC address (short flag available)
 anova-cli --mac-address aa:bb:cc:dd:ee:ff status
+anova-cli -m aa:bb:cc:dd:ee:ff status
 
-# Use custom config file
+# Use custom config file (short flag available)
 anova-cli --config /path/to/config.yaml status
+anova-cli -c /path/to/config.yaml status
 
-# Enable debug logging
+# Enable debug logging (short flag available)
 anova-cli --debug status
+anova-cli -d status
 
 # Show version
 anova-cli --version
+
+# Get help for any command
+anova-cli --help
+anova-cli status --help
 ```
 
 ## Device Discovery
