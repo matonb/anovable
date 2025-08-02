@@ -49,8 +49,8 @@ async def main():
         # Start cooking
         await anova.start_cooking()
 
-        # Set timer (auto-starts by default)
-        await anova.set_timer(120)  # 120 minutes, auto-starts
+        # Set timer (auto-starts by default, but only if cooker is running)
+        await anova.set_timer(120)  # 120 minutes, auto-starts if cooker running
 
         # Or set timer without auto-starting
         await anova.set_timer(120, auto_start=False)
@@ -86,22 +86,25 @@ anova-cli unit
 
 ### Control Commands
 ```bash
-# Start cooking
-anova-cli start
+# Typical workflow
+anova-cli set-temp 60.0    # Set target temperature
+anova-cli start            # Start cooking
+anova-cli set-timer 120    # Set timer (auto-starts since cooker is running)
 
-# Stop cooking
-anova-cli stop
+# Individual commands
+anova-cli start            # Start cooking
+anova-cli stop             # Stop cooking
 
 # Set target temperature (Celsius) - uses positional argument
 anova-cli set-temp 60.0
 
-# Set timer (minutes) - automatically starts timer by default
+# Set timer (minutes) - automatically starts timer if cooker is running
 anova-cli set-timer 120
 
 # Set timer without auto-starting
 anova-cli set-timer 120 --no-auto-start
 
-# Manual timer control
+# Manual timer control (requires cooker to be running)
 anova-cli start-timer
 anova-cli stop-timer
 ```

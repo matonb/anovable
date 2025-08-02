@@ -287,15 +287,24 @@ class AnovaBLE:
         # Auto-start the timer if requested (default behavior)
         if auto_start:
             try:
-                start_response = await self.start_timer()
-                self.logger.info("Timer automatically started: %s", start_response)
+                # Check if cooker is running first - timer can only start when cooker is running
+                status = await self.get_status()
+                if status.lower() == "running":
+                    start_response = await self.start_timer()
+                    self.logger.info("Timer automatically started: %s", start_response)
 
-                # Verify timer is now readable
-                await asyncio.sleep(0.5)
-                timer_status = await self.get_timer()
-                self.logger.info("Timer verification after start: %s", timer_status)
+                    # Verify timer is now readable
+                    await asyncio.sleep(0.5)
+                    timer_status = await self.get_timer()
+                    self.logger.info("Timer verification after start: %s", timer_status)
 
-                return f"{response}; Timer started: {start_response}"
+                    return f"{response}; Timer started: {start_response}"
+                else:
+                    self.logger.warning(
+                        "Cannot auto-start timer: cooker is not running (status: %s)",
+                        status,
+                    )
+                    return f"{response}; Warning: Timer set but not started - cooker must be running to start timer"
             except Exception as e:
                 self.logger.warning("Failed to auto-start timer: %s", e)
                 return f"{response}; Warning: Could not auto-start timer"
