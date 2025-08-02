@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.1 (2025-08-02)
+
+### Bug Fixes
+
+- Prevent timer auto-start when cooker is not running
+  ([`d038a1f`](https://github.com/matonb/anovable/commit/d038a1f70bdc49576cab46e3d2979c42ea8f8285))
+
+
 ## v1.2.0 (2025-08-02)
 
 ### Features
