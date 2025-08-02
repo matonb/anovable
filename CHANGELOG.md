@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.0 (2025-08-02)
+
+### Features
+
+- Improve timer functionality
+  ([`5ab9e6e`](https://github.com/matonb/anovable/commit/5ab9e6ebad9e3dd6c95e557a7eb80c897a5db1d5))
+
+
 ## v1.1.0 (2025-08-02)
 
 ### Features
