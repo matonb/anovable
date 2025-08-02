@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.0 (2025-08-02)
+
+### Features
+
+- Enable shell completion for CLI commands
+  ([`6e66dfb`](https://github.com/matonb/anovable/commit/6e66dfbb6a15ae48950854e0d43550bf294aeb31))
+
+
 ## v1.2.1 (2025-08-02)
 
 ### Bug Fixes
