@@ -200,24 +200,15 @@ class AnovaBLE:
             try:
                 response = await self._send_command(command)
 
-                # Validate timer response format
-                if command == "read timer" and response:
-                    if response.strip() and not response.lower().startswith("error"):
-                        return response
-                    elif attempt < MAX_RETRY_ATTEMPTS - 1:
-                        self.logger.warning(
-                            f"Invalid timer response '{response}', retrying..."
-                        )
-                        await asyncio.sleep(RETRY_DELAY)
-                        continue
-
                 return response
 
             except AnovaTimeoutError as e:
                 last_exception = e
                 if attempt < MAX_RETRY_ATTEMPTS - 1:
                     self.logger.warning(
-                        f"Command '{command}' timed out on attempt {attempt + 1}, retrying..."
+                        "Command '%s' timed out on attempt %d, retrying...",
+                        command,
+                        attempt + 1,
                     )
                     await asyncio.sleep(RETRY_DELAY)
                     continue
@@ -236,11 +227,11 @@ class AnovaBLE:
 
     async def start_cooking(self) -> str:
         """Start cooking."""
-        return await self._send_command("start")
+        return await self._send_command_with_retry("start")
 
     async def stop_cooking(self) -> str:
         """Stop cooking."""
-        return await self._send_command("stop")
+        return await self._send_command_with_retry("stop")
 
     # Temperature methods
     async def set_temperature(self, temp: float) -> str:
@@ -255,11 +246,11 @@ class AnovaBLE:
         Raises:
             AnovaValidationError: If temperature is out of range.
         """
-        if not (MIN_TEMPERATURE <= temp <= MAX_TEMPERATURE):
+        if not MIN_TEMPERATURE <= temp <= MAX_TEMPERATURE:
             raise AnovaValidationError(
                 f"Temperature must be between {MIN_TEMPERATURE} and {MAX_TEMPERATURE}°C"
             )
-        return await self._send_command(f"set temp {temp:.1f}")
+        return await self._send_command_with_retry(f"set temp {temp:.1f}")
 
     async def get_temperature(self) -> str:
         """Get current temperature."""
@@ -270,35 +261,63 @@ class AnovaBLE:
         return await self._send_command("read set temp")
 
     # Timer methods
-    async def set_timer(self, minutes: int) -> str:
-        """Set timer in minutes.
+    async def set_timer(self, minutes: int, auto_start: bool = True) -> str:
+        """Set timer in minutes and optionally start it automatically.
 
         Args:
             minutes: Timer duration in minutes.
+            auto_start: Whether to automatically start the timer after setting it.
 
         Returns:
             Response from device.
 
         Raises:
             AnovaValidationError: If timer value is out of range.
+            AnovaCommandError: If timer setting failed verification.
         """
-        if not (MIN_TIMER <= minutes <= MAX_TIMER):
+        if not MIN_TIMER <= minutes <= MAX_TIMER:
             raise AnovaValidationError(
                 f"Timer must be between {MIN_TIMER} and {MAX_TIMER} minutes"
             )
-        return await self._send_command(f"set timer {minutes}")
+
+        # Set the timer
+        response = await self._send_command_with_retry(f"set timer {minutes}")
+        self.logger.info("Timer set to %d minutes", minutes)
+
+        # Auto-start the timer if requested (default behavior)
+        if auto_start:
+            try:
+                start_response = await self.start_timer()
+                self.logger.info("Timer automatically started: %s", start_response)
+
+                # Verify timer is now readable
+                await asyncio.sleep(0.5)
+                timer_status = await self.get_timer()
+                self.logger.info("Timer verification after start: %s", timer_status)
+
+                return f"{response}; Timer started: {start_response}"
+            except Exception as e:
+                self.logger.warning("Failed to auto-start timer: %s", e)
+                return f"{response}; Warning: Could not auto-start timer"
+
+        return response
 
     async def get_timer(self) -> str:
         """Get timer status."""
+        # Check if cooker is running first - timer is only available when running
+        status = await self.get_status()
+        if status.lower() != "running":
+            raise AnovaCommandError("Timer status unavailable - cooker is not running")
+
         return await self._send_command_with_retry("read timer")
 
     async def start_timer(self) -> str:
         """Start timer."""
-        return await self._send_command("start time")
+        return await self._send_command_with_retry("start time")
 
     async def stop_timer(self) -> str:
         """Stop timer."""
-        return await self._send_command("stop time")
+        return await self._send_command_with_retry("stop time")
 
     # Unit methods
     async def get_unit(self) -> str:
@@ -307,8 +326,132 @@ class AnovaBLE:
 
     async def set_unit_celsius(self) -> str:
         """Set temperature unit to Celsius."""
-        return await self._send_command("set unit c")
+        return await self._send_command_with_retry("set unit c")
 
     async def set_unit_fahrenheit(self) -> str:
         """Set temperature unit to Fahrenheit."""
-        return await self._send_command("set unit f")
+        return await self._send_command_with_retry("set unit f")
+
+    # Network/WiFi configuration methods
+    async def get_device_id(self) -> str:
+        """Get device ID card for network authentication."""
+        return await self._send_command("get id card")
+
+    async def get_version(self) -> str:
+        """Get device firmware version."""
+        return await self._send_command("version")
+
+    async def set_device_name(self, name: str) -> str:
+        """Set device name.
+
+        Args:
+            name: Device name to set.
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"set name {name}")
+
+    async def set_secret_key(self, key: str) -> str:
+        """Set device secret key for network authentication.
+
+        Args:
+            key: Secret key for device authentication.
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"set number {key}")
+
+    async def start_smartlink(self) -> str:
+        """Start WiFi smartlink setup mode.
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry("smartlink start")
+
+    async def configure_server(self, ip: str, port: int = 8080) -> str:
+        """Configure server parameters for network communication.
+
+        Args:
+            ip: Server IP address.
+            port: Server port (default 8080).
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"server para {ip} {port}")
+
+    async def configure_wifi(self, ssid: str, password: str) -> str:
+        """Configure WiFi network settings.
+
+        Args:
+            ssid: WiFi network name.
+            password: WiFi network password.
+
+        Returns:
+            Response from device.
+
+        Note:
+            This uses WPA2PSK AES security by default.
+        """
+        return await self._send_command_with_retry(
+            f"wifi para 2 {ssid} {password} WPA2PSK AES"
+        )
+
+    # Additional utility methods
+    async def set_speaker_off(self) -> str:
+        """Disable device speaker."""
+        return await self._send_command_with_retry("set speaker off")
+
+    async def clear_alarm(self) -> str:
+        """Clear timer alarm."""
+        return await self._send_command_with_retry("clear alarm")
+
+    async def get_date(self) -> str:
+        """Get device date/time."""
+        return await self._send_command("read date")
+
+    async def set_date(self, date: str) -> str:
+        """Set device date/time.
+
+        Args:
+            date: Date/time string to set.
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"set date {date}")
+
+    async def get_calibration(self) -> str:
+        """Get temperature calibration offset."""
+        return await self._send_command("read cal")
+
+    async def set_calibration(self, offset: float) -> str:
+        """Set temperature calibration offset.
+
+        Args:
+            offset: Calibration offset in degrees.
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"cal {offset:.1f}")
+
+    async def set_led_color(self, red: int, green: int, blue: int) -> str:
+        """Set LED color (if supported by device).
+
+        Args:
+            red: Red value (0-255).
+            green: Green value (0-255).
+            blue: Blue value (0-255).
+
+        Returns:
+            Response from device.
+        """
+        return await self._send_command_with_retry(f"set led {red} {green} {blue}")
+
+    async def get_extended_data(self) -> str:
+        """Get extended device data/status."""
+        return await self._send_command("read data")

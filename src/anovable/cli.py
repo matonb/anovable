@@ -1,142 +1,549 @@
 """Command-line interface for Anova control."""
 
-import argparse
 import asyncio
+import json
 import logging
-import sys
+from typing import Annotated, Optional
+
+import typer
+from typer import Argument, Option
 
 from .client import AnovaBLE
 from .config import AnovaConfig
 from .exceptions import AnovaError
 
+app = typer.Typer(
+    name="anova-cli",
+    help="Control Anova Precision Cooker via Bluetooth LE",
+    add_completion=False,
+)
 
-async def main_async(args: argparse.Namespace) -> int:
-    """Main async function for CLI."""
-    # Load configuration
-    config = AnovaConfig(args.config)
 
-    # Setup logging
-    log_level = (
-        logging.DEBUG if args.debug else getattr(logging, config.log_level.upper())
-    )
-    logging.basicConfig(
-        level=log_level, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
+def format_response_debug(command: str, response: str, debug: bool = False) -> None:
+    """Format and print response in debug mode as JSON."""
+    if debug:
+        response_data = {
+            "command": command,
+            "response": response.strip(),
+            "raw_response": repr(response),
+        }
+        typer.echo("DEBUG Response: " + json.dumps(response_data, indent=2))
+
+
+async def connect_anova(
+    mac_address: Optional[str], config_path: Optional[str]
+) -> AnovaBLE:
+    """Connect to Anova device."""
+    config = AnovaConfig(config_path)
 
     # Get MAC address from config or command line
-    mac_address = args.mac_address or config.mac_address
-    if not mac_address:
-        print(
+    mac = mac_address or config.mac_address
+    if not mac:
+        typer.echo(
             "Error: No MAC address specified. Use --mac-address or configure in anovable.yaml",
-            file=sys.stderr,
+            err=True,
         )
-        return 1
+        raise typer.Exit(1)
 
-    anova = AnovaBLE(mac_address)
+    anova = AnovaBLE(mac)
+
+    if not await anova.connect():
+        typer.echo("Failed to connect to Anova device", err=True)
+        raise typer.Exit(1)
+
+    typer.echo("Connected to Anova!")
+    return anova
+
+
+@app.command()
+def status(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get comprehensive device status."""
+    asyncio.run(_status_async(mac_address, config, debug))
+
+
+@app.command()
+def state(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get comprehensive device status (alias for status)."""
+    asyncio.run(_status_async(mac_address, config, debug))
+
+
+async def _status_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for status command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
 
     try:
-        # Connect to device
-        if not await anova.connect():
-            print("Failed to connect to Anova device", file=sys.stderr)
-            return 1
+        typer.echo("\n--- Device Status ---")
 
-        print("Connected to Anova!")
+        # Get basic status
+        status = await anova.get_status()
+        format_response_debug("status", status, debug)
+        typer.echo(f"Status: {status}")
 
-        if args.command == "status":
-            status = await anova.get_status()
-            print(f"Status: {status}")
-        elif args.command == "temp":
-            temp = await anova.get_temperature()
-            print(f"Current temperature: {temp}")
-        elif args.command == "target":
-            target = await anova.get_target_temperature()
-            print(f"Target temperature: {target}")
-        elif args.command == "set-temp":
-            if args.value is None:
-                print("Error: --value required for set-temp", file=sys.stderr)
-                return 1
-            response = await anova.set_temperature(float(args.value))
-            print(f"Set temperature: {response}")
-        elif args.command == "start":
-            response = await anova.start_cooking()
-            print(f"Started: {response}")
-        elif args.command == "stop":
-            response = await anova.stop_cooking()
-            print(f"Stopped: {response}")
-        elif args.command == "timer":
+        # Get temperature unit first to format temperatures properly
+        unit = await anova.get_unit()
+        format_response_debug("read unit", unit, debug)
+        unit_symbol = "°C" if unit.lower() == "c" else "°F"
+
+        # Get current temperature
+        temp = await anova.get_temperature()
+        format_response_debug("read temp", temp, debug)
+        typer.echo(f"Current temperature: {temp}{unit_symbol}")
+
+        # Get target temperature
+        target = await anova.get_target_temperature()
+        format_response_debug("read set temp", target, debug)
+        typer.echo(f"Target temperature: {target}{unit_symbol}")
+
+        # Get timer status (only if cooker is running)
+        try:
             timer = await anova.get_timer()
-            print(f"Timer: {timer}")
-        elif args.command == "set-timer":
-            if args.value is None:
-                print("Error: --value required for set-timer", file=sys.stderr)
-                return 1
-            response = await anova.set_timer(int(args.value))
-            print(f"Set timer: {response}")
-        elif args.command == "unit":
-            unit = await anova.get_unit()
-            print(f"Unit: {unit}")
-        else:
-            print(f"Unknown command: {args.command}", file=sys.stderr)
-            return 1
-
-        return 0
+            format_response_debug("read timer", timer, debug)
+            typer.echo(f"Timer: {timer}")
+        except Exception as e:
+            typer.echo(f"Timer: {e}")
 
     except AnovaError as e:
-        print(f"Anova error: {e}", file=sys.stderr)
-        return 1
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
     except Exception as e:
-        print(f"Unexpected error: {e}", file=sys.stderr)
-        return 1
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def temp(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get current temperature."""
+    asyncio.run(_temp_async(mac_address, config, debug))
+
+
+async def _temp_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for temp command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        temp = await anova.get_temperature()
+        format_response_debug("read temp", temp, debug)
+        typer.echo(f"Current temperature: {temp}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def target(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get target temperature."""
+    asyncio.run(_target_async(mac_address, config, debug))
+
+
+async def _target_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for target command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        target = await anova.get_target_temperature()
+        format_response_debug("read set temp", target, debug)
+        typer.echo(f"Target temperature: {target}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command("set-temp")
+def set_temp(
+    temperature: Annotated[float, Argument(help="Temperature in Celsius")],
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Set target temperature."""
+    asyncio.run(_set_temp_async(temperature, mac_address, config, debug))
+
+
+async def _set_temp_async(
+    temperature: float,
+    mac_address: Optional[str],
+    config_path: Optional[str],
+    debug: bool,
+) -> None:
+    """Async implementation for set-temp command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.set_temperature(temperature)
+        format_response_debug(f"set temp {temperature}", response, debug)
+        typer.echo(f"Set temperature: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def start(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Start cooking."""
+    asyncio.run(_start_async(mac_address, config, debug))
+
+
+async def _start_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for start command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.start_cooking()
+        format_response_debug("start", response, debug)
+        typer.echo(f"Started: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def stop(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Stop cooking."""
+    asyncio.run(_stop_async(mac_address, config, debug))
+
+
+async def _stop_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for stop command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.stop_cooking()
+        format_response_debug("stop", response, debug)
+        typer.echo(f"Stopped: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def timer(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get timer status."""
+    asyncio.run(_timer_async(mac_address, config, debug))
+
+
+async def _timer_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for timer command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        timer = await anova.get_timer()
+        format_response_debug("read timer", timer, debug)
+        typer.echo(f"Timer: {timer}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command("set-timer")
+def set_timer(
+    minutes: Annotated[int, Argument(help="Timer duration in minutes")],
+    no_auto_start: Annotated[
+        bool, Option("--no-auto-start", help="Don't automatically start the timer")
+    ] = False,
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Set timer (automatically starts by default)."""
+    asyncio.run(
+        _set_timer_async(minutes, not no_auto_start, mac_address, config, debug)
+    )
+
+
+async def _set_timer_async(
+    minutes: int,
+    auto_start: bool,
+    mac_address: Optional[str],
+    config_path: Optional[str],
+    debug: bool,
+) -> None:
+    """Async implementation for set-timer command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.set_timer(minutes, auto_start=auto_start)
+        format_response_debug(f"set timer {minutes}", response, debug)
+        typer.echo(f"Set timer: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command("start-timer")
+def start_timer(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Start timer."""
+    asyncio.run(_start_timer_async(mac_address, config, debug))
+
+
+async def _start_timer_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for start-timer command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.start_timer()
+        format_response_debug("start time", response, debug)
+        typer.echo(f"Started timer: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command("stop-timer")
+def stop_timer(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Stop timer."""
+    asyncio.run(_stop_timer_async(mac_address, config, debug))
+
+
+async def _stop_timer_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for stop-timer command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        response = await anova.stop_timer()
+        format_response_debug("stop time", response, debug)
+        typer.echo(f"Stopped timer: {response}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command()
+def unit(
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Get temperature unit."""
+    asyncio.run(_unit_async(mac_address, config, debug))
+
+
+async def _unit_async(
+    mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for unit command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        unit = await anova.get_unit()
+        format_response_debug("read unit", unit, debug)
+        typer.echo(f"Unit: {unit}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
     finally:
         await anova.disconnect()
 
 
 def main() -> None:
     """Main CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Control Anova Precision Cooker via Bluetooth LE"
-    )
-    parser.add_argument(
-        "--mac-address", help="MAC address of Anova device (overrides config file)"
-    )
-    parser.add_argument(
-        "--config",
-        help="Path to configuration file (default: search standard locations)",
-    )
-    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
-    parser.add_argument("--version", action="version", version="anovable 0.1.0")
-
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")
-
-    # Status commands
-    subparsers.add_parser("status", help="Get device status")
-    subparsers.add_parser("temp", help="Get current temperature")
-    subparsers.add_parser("target", help="Get target temperature")
-
-    # Control commands
-    subparsers.add_parser("start", help="Start cooking")
-    subparsers.add_parser("stop", help="Stop cooking")
-
-    # Temperature setting
-    temp_parser = subparsers.add_parser("set-temp", help="Set target temperature")
-    temp_parser.add_argument("--value", required=True, help="Temperature in Celsius")
-
-    # Timer commands
-    subparsers.add_parser("timer", help="Get timer status")
-    timer_parser = subparsers.add_parser("set-timer", help="Set timer")
-    timer_parser.add_argument("--value", required=True, help="Timer in minutes")
-
-    # Unit commands
-    subparsers.add_parser("unit", help="Get temperature unit")
-
-    args = parser.parse_args()
-
-    if args.command is None:
-        parser.print_help()
-        sys.exit(1)
-
-    exit_code = asyncio.run(main_async(args))
-    sys.exit(exit_code)
+    app()
 
 
 if __name__ == "__main__":
