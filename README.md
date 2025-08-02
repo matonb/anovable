@@ -129,6 +129,10 @@ anova-cli --version
 # Get help for any command
 anova-cli --help
 anova-cli status --help
+
+# Enable shell completion (bash, zsh, fish, PowerShell)
+anova-cli --install-completion
+anova-cli --show-completion  # Show completion script to copy manually
 ```
 
 ## Device Discovery
