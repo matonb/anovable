@@ -14,11 +14,13 @@ from .constants import (
     CHARACTERISTIC_UUID,
     DEVICE_NAME,
     MAX_COMMAND_LENGTH,
+    MAX_RETRY_ATTEMPTS,
     MAX_TEMPERATURE,
     MAX_TIMER,
     MIN_TEMPERATURE,
     MIN_TIMER,
     RESPONSE_TIMEOUT,
+    RETRY_DELAY,
 )
 from .exceptions import (
     AnovaCommandError,
@@ -178,6 +180,55 @@ class AnovaBLE:
                 f"Timeout waiting for response to: {command}"
             ) from e
 
+    async def _send_command_with_retry(self, command: str) -> str:
+        """Send command with retry logic for improved reliability.
+
+        Args:
+            command: Command to send to device.
+
+        Returns:
+            Response from device.
+
+        Raises:
+            AnovaConnectionError: If not connected to device.
+            AnovaCommandError: If command is invalid.
+            AnovaTimeoutError: If command times out after all retries.
+        """
+        last_exception = None
+
+        for attempt in range(MAX_RETRY_ATTEMPTS):
+            try:
+                response = await self._send_command(command)
+
+                # Validate timer response format
+                if command == "read timer" and response:
+                    if response.strip() and not response.lower().startswith("error"):
+                        return response
+                    elif attempt < MAX_RETRY_ATTEMPTS - 1:
+                        self.logger.warning(
+                            f"Invalid timer response '{response}', retrying..."
+                        )
+                        await asyncio.sleep(RETRY_DELAY)
+                        continue
+
+                return response
+
+            except AnovaTimeoutError as e:
+                last_exception = e
+                if attempt < MAX_RETRY_ATTEMPTS - 1:
+                    self.logger.warning(
+                        f"Command '{command}' timed out on attempt {attempt + 1}, retrying..."
+                    )
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                break
+            except (AnovaConnectionError, AnovaCommandError):
+                raise
+
+        raise AnovaTimeoutError(
+            f"Command '{command}' failed after {MAX_RETRY_ATTEMPTS} attempts: {last_exception}"
+        )
+
     # Status and control methods
     async def get_status(self) -> str:
         """Get device status."""
@@ -239,7 +290,7 @@ class AnovaBLE:
 
     async def get_timer(self) -> str:
         """Get timer status."""
-        return await self._send_command("read timer")
+        return await self._send_command_with_retry("read timer")
 
     async def start_timer(self) -> str:
         """Start timer."""
