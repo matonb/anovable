@@ -105,7 +105,6 @@ branch = "main"
 changelog_file = "CHANGELOG.md"
 build_command = "python -m build"
 dist_path = "dist/"
-upload_to_pypi = true
 upload_to_release = true
 
 [tool.semantic_release.commit_parser_options]
