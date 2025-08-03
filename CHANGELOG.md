@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.3.1 (2025-08-03)
+
+### Bug Fixes
+
+- **ci**: Resolve PyPI publishing workflow
+  ([`7a11c53`](https://github.com/matonb/anovable/commit/7a11c53a73d8b943439ec4b7f0f5c95ffd7bda73))
+
+
 ## v1.3.0 (2025-08-02)
 
 ### Features
