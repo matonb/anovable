@@ -8,9 +8,18 @@ from typing import Annotated, Optional
 import typer
 from typer import Argument, Option
 
+from ._version import __version__
 from .client import AnovaBLE
 from .config import AnovaConfig
 from .exceptions import AnovaError
+
+
+def version_callback(value: bool) -> None:
+    """Print version and exit."""
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
 
 app = typer.Typer(
     name="anova-cli",
@@ -541,10 +550,21 @@ async def _unit_async(
         await anova.disconnect()
 
 
-def main() -> None:
-    """Main CLI entry point."""
-    app()
+@app.callback()
+def main(
+    version: Annotated[
+        Optional[bool],
+        Option(
+            "--version",
+            callback=version_callback,
+            is_eager=True,
+            help="Show version and exit",
+        ),
+    ] = None,
+) -> None:
+    """Control Anova Precision Cooker via Bluetooth LE."""
+    pass
 
 
 if __name__ == "__main__":
-    main()
+    app()
