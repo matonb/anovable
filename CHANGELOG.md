@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.0 (2025-08-15)
+
+### Features
+
+- Add --version option to CLI
+  ([`fce3822`](https://github.com/matonb/anovable/commit/fce3822c9c79058e14b10c7bb97d8c3f9914f0cb))
+
+
 ## v1.3.1 (2025-08-03)
 
 ### Bug Fixes
