@@ -52,7 +52,7 @@ Repository = "https://github.com/matonb/anovable"
 Issues = "https://github.com/matonb/anovable/issues"
 
 [project.scripts]
-anova-cli = "anovable.cli:main"
+anova-cli = "anovable.cli:app"
 
 [tool.hatch.version]
 source = "vcs"

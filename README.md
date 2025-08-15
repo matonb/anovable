@@ -5,7 +5,7 @@ Python library for controlling Anova Precision Cookers via Bluetooth LE.
 ## Installation
 
 ```bash
-pip install anovable
+pip install matonb-anovable
 ```
 
 ## Configuration
