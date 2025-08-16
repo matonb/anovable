@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.0 (2025-08-16)
+
+### Features
+
+- **cli**: Add set-unit command
+  ([`12299b8`](https://github.com/matonb/anovable/commit/12299b86020252697f6149a6e8c2ad575606a537))
+
+### Refactoring
+
+- **cli**: Improve naming consistency
+  ([`619e87d`](https://github.com/matonb/anovable/commit/619e87d9ea6757f0bc0f5546263c0f4d88310edf))
+
+
 ## v1.4.1 (2025-08-16)
 
 ### Bug Fixes
