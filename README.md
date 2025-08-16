@@ -95,7 +95,7 @@ anova-cli set-timer 120    # Set timer (auto-starts since cooker is running)
 anova-cli start            # Start cooking
 anova-cli stop             # Stop cooking
 
-# Set target temperature (Celsius) - uses positional argument
+# Set target temperature (°C or °F) - uses positional argument
 anova-cli set-temp 60.0
 
 # Set timer (minutes) - automatically starts timer if cooker is running
@@ -111,15 +111,15 @@ anova-cli stop-timer
 
 ### Options
 ```bash
-# Override MAC address (short flag available)
+# Override MAC address
 anova-cli --mac-address aa:bb:cc:dd:ee:ff status
 anova-cli -m aa:bb:cc:dd:ee:ff status
 
-# Use custom config file (short flag available)
+# Use custom config file
 anova-cli --config /path/to/config.yaml status
 anova-cli -c /path/to/config.yaml status
 
-# Enable debug logging (short flag available)
+# Enable debug logging
 anova-cli --debug status
 anova-cli -d status
 

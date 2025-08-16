@@ -11,7 +11,12 @@ from typer import Argument, Option
 from ._version import __version__
 from .client import AnovaBLE
 from .config import AnovaConfig
-from .exceptions import AnovaError
+from .exceptions import (
+    AnovaCommandError,
+    AnovaConnectionError,
+    AnovaError,
+    AnovaTimeoutError,
+)
 
 
 def version_callback(value: bool) -> None:
@@ -109,9 +114,9 @@ async def _status_async(
         typer.echo("\n--- Device Status ---")
 
         # Get basic status
-        status = await anova.get_status()
-        format_response_debug("status", status, debug)
-        typer.echo(f"Status: {status}")
+        device_status = await anova.get_status()
+        format_response_debug("status", device_status, debug)
+        typer.echo(f"Status: {device_status}")
 
         # Get temperature unit first to format temperatures properly
         unit_value = await anova.get_unit()
@@ -124,16 +129,16 @@ async def _status_async(
         typer.echo(f"Current temperature: {temp_value}{unit_symbol}")
 
         # Get target temperature
-        target = await anova.get_target_temperature()
-        format_response_debug("read set temp", target, debug)
+        target_temp = await anova.get_target_temperature()
+        format_response_debug("read set temp", target_temp, debug)
         typer.echo(f"Target temperature: {target}{unit_symbol}")
 
         # Get timer status (only if cooker is running)
         try:
-            timer = await anova.get_timer()
-            format_response_debug("read timer", timer, debug)
-            typer.echo(f"Timer: {timer}")
-        except Exception as e:
+            timer_value = await anova.get_timer()
+            format_response_debug("read timer", timer_value, debug)
+            typer.echo(f"Timer: {timer_value}")
+        except (AnovaConnectionError, AnovaTimeoutError, AnovaCommandError) as e:
             typer.echo(f"Timer: {e}")
 
     except AnovaError as e:
@@ -225,8 +230,8 @@ async def _target_async(
 
 
 @app.command("set-temp")
-def set_temp(
-    temperature: Annotated[float, Argument(help="Temperature in Celsius")],
+def set_temperature(
+    cooking_temp: Annotated[float, Argument(help="Temperature to set in °C or °F")],
     mac_address: Annotated[
         Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
     ] = None,
@@ -238,11 +243,11 @@ def set_temp(
     ] = False,
 ) -> None:
     """Set target temperature."""
-    asyncio.run(_set_temp_async(temperature, mac_address, config, debug))
+    asyncio.run(_set_temperature_async(cooking_temp, mac_address, config, debug))
 
 
-async def _set_temp_async(
-    temperature: float,
+async def _set_temperature_async(
+    cooking_temperature: float,
     mac_address: Optional[str],
     config_path: Optional[str],
     debug: bool,
@@ -254,8 +259,8 @@ async def _set_temp_async(
     anova = await connect_anova(mac_address, config_path)
 
     try:
-        response = await anova.set_temperature(temperature)
-        format_response_debug(f"set temp {temperature}", response, debug)
+        response = await anova.set_temperature(cooking_temperature)
+        format_response_debug(f"set temp {cooking_temperature}", response, debug)
         typer.echo(f"Set temperature: {response}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
