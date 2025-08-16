@@ -65,7 +65,7 @@ class AnovaBLE:
             devices = await BleakScanner.discover()
             for device in devices:
                 if device.name == DEVICE_NAME:
-                    self.logger.info(f"Found Anova device: {device.address}")
+                    self.logger.info("Found Anova device: %s", device.address)
                     return str(device.address)
 
             self.logger.warning("No Anova device found")
@@ -88,7 +88,7 @@ class AnovaBLE:
                 return False
 
         try:
-            self.logger.info(f"Connecting to {self.mac_address}")
+            self.logger.info("Connecting to %s", self.mac_address)
             self.client = BleakClient(self.mac_address)
             await self.client.connect()
 
@@ -110,7 +110,7 @@ class AnovaBLE:
             return True
 
         except Exception as e:
-            self.logger.error(f"Connection failed: {e}")
+            self.logger.error("Connection failed: %s", e)
             await self.disconnect()
             raise AnovaConnectionError(f"Connection failed: {e}") from e
 
@@ -122,7 +122,7 @@ class AnovaBLE:
         self.logger.info("Disconnected from Anova")
 
     def _notification_handler(
-        self, characteristic: BleakGATTCharacteristic, data: bytearray
+        self, _characteristic: BleakGATTCharacteristic, data: bytearray
     ) -> None:
         """Handle notifications from device."""
         response = data.decode("ascii")
@@ -158,7 +158,7 @@ class AnovaBLE:
         if len(full_command.encode()) > MAX_COMMAND_LENGTH:
             raise AnovaCommandError(f"Command too long: {command}")
 
-        self.logger.debug(f"Sending command: {command}")
+        self.logger.debug("Sending command: %s", command)
 
         # Clear previous response
         self._response_event.clear()
@@ -172,10 +172,10 @@ class AnovaBLE:
             await asyncio.wait_for(
                 self._response_event.wait(), timeout=RESPONSE_TIMEOUT
             )
-            self.logger.debug(f"Received response: {self._last_response}")
+            self.logger.debug("Received response: %s", self._last_response)
             return self._last_response
         except asyncio.TimeoutError as e:
-            self.logger.error(f"Timeout waiting for response to: {command}")
+            self.logger.error("Timeout waiting for response to: %s", command)
             raise AnovaTimeoutError(
                 f"Timeout waiting for response to: {command}"
             ) from e
@@ -213,8 +213,6 @@ class AnovaBLE:
                     await asyncio.sleep(RETRY_DELAY)
                     continue
                 break
-            except (AnovaConnectionError, AnovaCommandError):
-                raise
 
         raise AnovaTimeoutError(
             f"Command '{command}' failed after {MAX_RETRY_ATTEMPTS} attempts: {last_exception}"
@@ -284,32 +282,26 @@ class AnovaBLE:
         response = await self._send_command_with_retry(f"set timer {minutes}")
         self.logger.info("Timer set to %d minutes", minutes)
 
-        # Auto-start the timer if requested (default behavior)
-        if auto_start:
-            try:
-                # Check if cooker is running first - timer can only start when cooker is running
-                status = await self.get_status()
-                if status.lower() == "running":
-                    start_response = await self.start_timer()
-                    self.logger.info("Timer automatically started: %s", start_response)
+        # Check if cooker is running first
+        status = await self.get_status()
+        if status.lower() != "running" and auto_start:
+            await self.start_cooking()
+            self.logger.info("Cooker started for timer auto-start")
 
-                    # Verify timer is now readable
-                    await asyncio.sleep(0.5)
-                    timer_status = await self.get_timer()
-                    self.logger.info("Timer verification after start: %s", timer_status)
+        # Start the timer
+        try:
+            start_response = await self.start_timer()
+            self.logger.info("Timer started: %s", start_response)
 
-                    return f"{response}; Timer started: {start_response}"
-                else:
-                    self.logger.warning(
-                        "Cannot auto-start timer: cooker is not running (status: %s)",
-                        status,
-                    )
-                    return f"{response}; Warning: Timer set but not started - cooker must be running to start timer"
-            except Exception as e:
-                self.logger.warning("Failed to auto-start timer: %s", e)
-                return f"{response}; Warning: Could not auto-start timer"
+            # Verify timer is now readable
+            await asyncio.sleep(0.5)
+            timer_status = await self.get_timer()
+            self.logger.info("Timer verification after start: %s", timer_status)
 
-        return response
+            return f"{response}; Timer started: {start_response}"
+        except (AnovaConnectionError, AnovaCommandError, AnovaTimeoutError) as e:
+            self.logger.warning("Failed to start timer: %s", e)
+            return f"{response}; Warning: Could not start timer"
 
     async def get_timer(self) -> str:
         """Get timer status."""

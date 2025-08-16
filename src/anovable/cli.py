@@ -114,14 +114,14 @@ async def _status_async(
         typer.echo(f"Status: {status}")
 
         # Get temperature unit first to format temperatures properly
-        unit = await anova.get_unit()
-        format_response_debug("read unit", unit, debug)
-        unit_symbol = "°C" if unit.lower() == "c" else "°F"
+        unit_value = await anova.get_unit()
+        format_response_debug("read unit", unit_value, debug)
+        unit_symbol = "°C" if unit_value.lower() == "c" else "°F"
 
         # Get current temperature
-        temp = await anova.get_temperature()
-        format_response_debug("read temp", temp, debug)
-        typer.echo(f"Current temperature: {temp}{unit_symbol}")
+        temp_value = await anova.get_temperature()
+        format_response_debug("read temp", temp_value, debug)
+        typer.echo(f"Current temperature: {temp_value}{unit_symbol}")
 
         # Get target temperature
         target = await anova.get_target_temperature()
@@ -147,7 +147,7 @@ async def _status_async(
 
 
 @app.command()
-def temp(
+def temperature(
     mac_address: Annotated[
         Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
     ] = None,
@@ -159,22 +159,22 @@ def temp(
     ] = False,
 ) -> None:
     """Get current temperature."""
-    asyncio.run(_temp_async(mac_address, config, debug))
+    asyncio.run(_temperature_async(mac_address, config, debug))
 
 
-async def _temp_async(
+async def _temperature_async(
     mac_address: Optional[str], config_path: Optional[str], debug: bool
 ) -> None:
-    """Async implementation for temp command."""
+    """Async implementation for temperature command."""
     if debug:
         logging.basicConfig(level=logging.DEBUG)
 
     anova = await connect_anova(mac_address, config_path)
 
     try:
-        temp = await anova.get_temperature()
-        format_response_debug("read temp", temp, debug)
-        typer.echo(f"Current temperature: {temp}")
+        temp_value = await anova.get_temperature()
+        format_response_debug("read temp", temp_value, debug)
+        typer.echo(f"Current temperature: {temp_value}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
         raise typer.Exit(1) from e
@@ -211,9 +211,9 @@ async def _target_async(
     anova = await connect_anova(mac_address, config_path)
 
     try:
-        target = await anova.get_target_temperature()
-        format_response_debug("read set temp", target, debug)
-        typer.echo(f"Target temperature: {target}")
+        target_temperature = await anova.get_target_temperature()
+        format_response_debug("read set temp", target_temperature, debug)
+        typer.echo(f"Target temperature: {target_temperature}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
         raise typer.Exit(1) from e
@@ -371,9 +371,9 @@ async def _timer_async(
     anova = await connect_anova(mac_address, config_path)
 
     try:
-        timer = await anova.get_timer()
-        format_response_debug("read timer", timer, debug)
-        typer.echo(f"Timer: {timer}")
+        timer_value = await anova.get_timer()
+        format_response_debug("read timer", timer_value, debug)
+        typer.echo(f"Timer: {timer_value}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
         raise typer.Exit(1) from e
@@ -537,9 +537,9 @@ async def _unit_async(
     anova = await connect_anova(mac_address, config_path)
 
     try:
-        unit = await anova.get_unit()
-        format_response_debug("read unit", unit, debug)
-        typer.echo(f"Unit: {unit}")
+        unit_value = await anova.get_unit()
+        format_response_debug("read unit", unit_value, debug)
+        typer.echo(f"Unit: {unit_value}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
         raise typer.Exit(1) from e
@@ -552,7 +552,7 @@ async def _unit_async(
 
 @app.callback()
 def main(
-    version: Annotated[
+    _version: Annotated[
         Optional[bool],
         Option(
             "--version",
@@ -563,7 +563,6 @@ def main(
     ] = None,
 ) -> None:
     """Control Anova Precision Cooker via Bluetooth LE."""
-    pass
 
 
 if __name__ == "__main__":
