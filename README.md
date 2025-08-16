@@ -98,6 +98,10 @@ anova-cli stop             # Stop cooking
 # Set target temperature (°C or °F) - uses positional argument
 anova-cli set-temp 60.0
 
+# Set temperature unit
+anova-cli set-unit c           # Set to Celsius
+anova-cli set-unit f           # Set to Fahrenheit
+
 # Set timer (minutes) - automatically starts timer if cooker is running
 anova-cli set-timer 120
 
