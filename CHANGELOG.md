@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.4.1 (2025-08-16)
+
+### Bug Fixes
+
+- Trigger release
+  ([`3b83a30`](https://github.com/matonb/anovable/commit/3b83a300424c849be922ed905a6b52abeb189560))
+
+### Refactoring
+
+- **cli,client**: Improve naming consistency
+  ([`f868bdd`](https://github.com/matonb/anovable/commit/f868bddbac86fec11e7fa9554805ec1ae5efe3f1))
+
+
 ## v1.4.0 (2025-08-15)
 
 ### Features
