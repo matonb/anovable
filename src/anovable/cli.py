@@ -61,9 +61,13 @@ async def connect_anova(
 
     anova = AnovaBLE(mac)
 
-    if not await anova.connect():
-        typer.echo("Failed to connect to Anova device", err=True)
-        raise typer.Exit(1)
+    try:
+        if not await anova.connect():
+            typer.echo("Failed to connect to Anova device", err=True)
+            raise typer.Exit(1)
+    except AnovaConnectionError as e:
+        typer.echo(f"Connection error: {e}", err=True)
+        raise typer.Exit(1) from e
 
     typer.echo("Connected to Anova!")
     return anova
@@ -545,6 +549,59 @@ async def _unit_async(
         unit_value = await anova.get_unit()
         format_response_debug("read unit", unit_value, debug)
         typer.echo(f"Unit: {unit_value}")
+    except AnovaError as e:
+        typer.echo(f"Anova error: {e}", err=True)
+        raise typer.Exit(1) from e
+    except Exception as e:
+        typer.echo(f"Unexpected error: {e}", err=True)
+        raise typer.Exit(1) from e
+    finally:
+        await anova.disconnect()
+
+
+@app.command("set-unit")
+def set_unit(
+    unit: Annotated[
+        str, Argument(help="Temperature unit: 'c' for Celsius, 'f' for Fahrenheit")
+    ],
+    mac_address: Annotated[
+        Optional[str], Option("--mac-address", "-m", help="MAC address of Anova device")
+    ] = None,
+    config: Annotated[
+        Optional[str], Option("--config", "-c", help="Path to configuration file")
+    ] = None,
+    debug: Annotated[
+        bool, Option("--debug", "-d", help="Enable debug logging")
+    ] = False,
+) -> None:
+    """Set temperature unit."""
+    asyncio.run(_set_unit_async(unit, mac_address, config, debug))
+
+
+async def _set_unit_async(
+    unit: str, mac_address: Optional[str], config_path: Optional[str], debug: bool
+) -> None:
+    """Async implementation for set-unit command."""
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    # Validate unit
+    unit_lower = unit.lower()
+    if unit_lower not in ["c", "f", "celsius", "fahrenheit"]:
+        typer.echo("Error: Unit must be 'c', 'f', 'celsius', or 'fahrenheit'", err=True)
+        raise typer.Exit(1)
+
+    anova = await connect_anova(mac_address, config_path)
+
+    try:
+        if unit_lower in ["c", "celsius"]:
+            response = await anova.set_unit_celsius()
+            format_response_debug("set unit c", response, debug)
+        else:
+            response = await anova.set_unit_fahrenheit()
+            format_response_debug("set unit f", response, debug)
+
+        typer.echo(f"Set unit: {response}")
     except AnovaError as e:
         typer.echo(f"Anova error: {e}", err=True)
         raise typer.Exit(1) from e

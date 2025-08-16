@@ -110,7 +110,6 @@ class AnovaBLE:
             return True
 
         except Exception as e:
-            self.logger.error("Connection failed: %s", e)
             await self.disconnect()
             raise AnovaConnectionError(f"Connection failed: {e}") from e
 
