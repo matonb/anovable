@@ -7,8 +7,30 @@ on:
     branches: [ main ]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs: ${{ steps.changes.outputs.docs }}
+      code: ${{ steps.changes.outputs.code }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dorny/paths-filter@v2
+      id: changes
+      with:
+        filters: |
+          docs:
+            - '**/*.md'
+            - '**/*.rst'
+            - 'docs/**'
+          code:
+            - '!**/*.md'
+            - '!**/*.rst'
+            - '!docs/**'
+
   test:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       matrix:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
@@ -44,8 +66,8 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.test.result == 'success' || (needs.changes.outputs.code == 'false' && needs.test.result == 'skipped'))
     environment: release
     permissions:
       id-token: write  # For PyPI trusted publishing
