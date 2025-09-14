@@ -13,7 +13,7 @@ jobs:
       docs: ${{ steps.changes.outputs.docs }}
       code: ${{ steps.changes.outputs.code }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dorny/paths-filter@v3
       id: changes
       with:
@@ -36,7 +36,7 @@ jobs:
         python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
@@ -74,7 +74,7 @@ jobs:
       contents: write  # For creating releases and tags
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
